@@ -6,85 +6,95 @@ import net.fabricmc.fabric.api.transfer.v1.item.ItemStorage;
 import net.fabricmc.fabric.api.transfer.v1.item.ItemVariant;
 import net.fabricmc.fabric.api.transfer.v1.storage.Storage;
 import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.CrafterBlock;
-import net.minecraft.block.dispenser.ItemDispenserBehavior;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.screen.NamedScreenHandlerFactory;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.state.property.Properties;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.random.Random;
-import net.minecraft.world.World;
-import net.minecraft.world.WorldEvents;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.dispenser.DefaultDispenseItemBehavior;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.CrafterBlock;
+import net.minecraft.world.level.block.LevelEvent;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 
 public abstract class BaseAutoBlock extends CrafterBlock {
-    public BaseAutoBlock(Settings settings){
+    public BaseAutoBlock(Properties settings){
         super(settings);
     }
 
     @Override
-    public void scheduledTick(BlockState state, ServerWorld world, BlockPos pos, Random random) {
-        if(state.get(Properties.CRAFTING)){
-            world.setBlockState(pos, state.with(Properties.CRAFTING, false));
+    protected void tick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
+        if (state.getValue(BlockStateProperties.CRAFTING)) {
+            level.setBlock(pos, state.setValue(BlockStateProperties.CRAFTING, false), 2);
             return;
         }
-        super.scheduledTick(state, world, pos, random);
+        super.tick(state, level, pos, random);
     }
 
     @Override
-    protected void craft(BlockState state, ServerWorld world, BlockPos pos) {
-        BlockEntity blockEntity = world.getBlockEntity(pos);
-        if(!(blockEntity instanceof BaseAutoBlockEntity)) return;
-        ItemStack outputStack = ((BaseAutoBlockEntity)blockEntity).craft();
-        if(outputStack.isEmpty()){
-            world.syncWorldEvent(WorldEvents.CRAFTER_FAILS, pos, 0);
+    protected void dispenseFrom(BlockState state, ServerLevel level, BlockPos pos) {
+        BlockEntity blockEntity = level.getBlockEntity(pos);
+        if (!(blockEntity instanceof BaseAutoBlockEntity auto)) return;
+
+        ItemStack outputStack = auto.craft();
+        if (outputStack.isEmpty()) {
+            level.levelEvent(LevelEvent.SOUND_CRAFTER_FAIL, pos, 0);
             return;
         }
-        world.setBlockState(pos, state.with(Properties.CRAFTING, true));
-        world.scheduleBlockTick(pos, this, 6);
-        outputStack.onCraftByCrafter(world);
 
-        // Transfer output
-        Direction side = state.get(Properties.ORIENTATION).getFacing();
-        Storage<ItemVariant> remoteInventory = ItemStorage.SIDED.find(world, pos.offset(side), side.getOpposite());
+        level.setBlock(pos, state.setValue(BlockStateProperties.CRAFTING, true), 2);
+        level.scheduleTick(pos, this, 6);
+        outputStack.onCraftedBySystem(level);
 
-        if(remoteInventory != null){
-            ItemVariant outputIV = ItemVariant.of(outputStack);
-            try (Transaction transaction = Transaction.openOuter()){
-                outputStack.decrement((int)remoteInventory.insert(outputIV, outputStack.getCount(), transaction));
+        Direction side = state.getValue(BlockStateProperties.ORIENTATION).front();
+
+        // Try to push the output into the container in front of us.
+        Storage<ItemVariant> remoteInventory = ItemStorage.SIDED.find(level, pos.relative(side), side.getOpposite());
+        if (remoteInventory != null) {
+            ItemVariant outputVariant = ItemVariant.of(outputStack);
+            try (Transaction transaction = Transaction.openOuter()) {
+                outputStack.shrink((int) remoteInventory.insert(outputVariant, outputStack.getCount(), transaction));
                 transaction.commit();
             }
         }
-        // Throw output on the ground
-        if(!outputStack.isEmpty()){
-            world.syncWorldEvent(WorldEvents.CRAFTER_CRAFTS, pos, 0);
-            world.syncWorldEvent(WorldEvents.CRAFTER_SHOOTS, pos, side.getId());
-            ItemDispenserBehavior.spawnItem(world, outputStack, 6, side, pos.toCenterPos().offset(side, 0.7d));
+
+        // Anything left over is thrown out into the world.
+        if (!outputStack.isEmpty()) {
+            level.levelEvent(LevelEvent.SOUND_CRAFTER_CRAFT, pos, 0);
+            DefaultDispenseItemBehavior.spawnItem(level, outputStack, 6, side, Vec3.atCenterOf(pos).relative(side, 0.7d));
+        } else {
+            level.levelEvent(LevelEvent.SOUND_CRAFTER_CRAFT, pos, 0);
         }
     }
 
     @Override
-    public ActionResult onUse(BlockState state, World world, BlockPos pos, PlayerEntity player, BlockHitResult hit) {
-        if (world.isClient) 
-            return ActionResult.SUCCESS;
-        NamedScreenHandlerFactory screenHandlerFactory = state.createScreenHandlerFactory(world, pos);
-        if (screenHandlerFactory != null) {
-            player.openHandledScreen(screenHandlerFactory);
+    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
+        if (level.isClientSide()) {
+            return InteractionResult.SUCCESS;
         }
-        return ActionResult.CONSUME;
+        BlockEntity blockEntity = level.getBlockEntity(pos);
+        if (blockEntity instanceof BaseAutoBlockEntity auto && auto.createMenu(0, player.getInventory(), player) != null) {
+            player.openMenu(auto);
+        }
+        return InteractionResult.CONSUME;
     }
 
     @Override
-    public int getComparatorOutput(BlockState state, World world, BlockPos pos) {
-        BlockEntity blockEntity = world.getBlockEntity(pos);
-        if (blockEntity instanceof BaseAutoBlockEntity) {
-           return ((BaseAutoBlockEntity)blockEntity).getComparatorOutput();
+    protected boolean hasAnalogOutputSignal(BlockState state) {
+        return true;
+    }
+
+    @Override
+    protected int getAnalogOutputSignal(BlockState state, Level level, BlockPos pos, Direction direction) {
+        BlockEntity blockEntity = level.getBlockEntity(pos);
+        if (blockEntity instanceof BaseAutoBlockEntity auto) {
+            return auto.getComparatorOutput();
         }
         return 0;
     }

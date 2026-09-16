@@ -1,0 +1,19 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "category": "redstone",
+    "pattern": [
+        "iii",
+        "iFi",
+        "RDR"
+    ],
+    "key": {
+        "i": "#c:ingots/iron",
+        "F": "minecraft:fletching_table",
+        "R": "#c:dusts/redstone",
+        "D": "minecraft:dropper"
+    },
+    "result": {
+        "id": "autocrafters:autofletching",
+        "count": 1
+    }
+}

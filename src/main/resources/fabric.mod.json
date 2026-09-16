@@ -1,36 +1,31 @@
 {
-	"schemaVersion": 1,
-	"id": "autocrafters",
-	"version": "${version}",
-	"name": "Automatic Crafters",
-	"description": "Adds Crafter-style redstone-powered counterparts for other manual workbenches.",
-	"authors": [
-		"iluha168"
-	],
-	"contact": {
-		"homepage": "https://modrinth.com/mod/autocrafters",
-		"sources": "https://github.com/iluha168/MCAutoCrafters",
-		"discord": "https://discord.gg/8MeZTmMP7m"
-	},
-	"license": "MIT",
-	"icon": "assets/autocrafters/icon.png",
-	"environment": "*",
-	"entrypoints": {
-		"main": [
-			"com.iluha168.autocrafters.ServerMod"
-		],
-		"client": [
-			"com.iluha168.autocrafters.ClientMod"
-		]
-	},
-	"mixins": [
-	],
-	"depends": {
-		"fabricloader": ">=0.16.9",
-		"minecraft": ">=1.21.4",
-		"java": ">=21",
-		"fabric-api": "*"
-	},
-	"suggests": {
-	}
+  "schemaVersion": 1,
+  "id": "autocrafters",
+  "version": "${version}",
+  "name": "AutoCrafters",
+  "description": "Adds Crafter-style counterparts for other manual workbenches, e.g. loom and grindstone.",
+  "authors": ["iluha168"],
+  "contact": {
+    "homepage": "https://modrinth.com/mod/autocrafters",
+    "sources": "https://github.com/iluha168/MCAutoCrafters",
+    "issues": "https://discord.gg/8MeZTmMP7m"
+  },
+  "license": "MIT",
+  "icon": "assets/autocrafters/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.iluha168.autocrafters.ServerMod"
+    ],
+    "client": [
+      "com.iluha168.autocrafters.ClientMod"
+    ]
+  },
+  "mixins": [],
+  "depends": {
+    "fabricloader": ">=0.19.0",
+    "minecraft": "~26.2",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
 }

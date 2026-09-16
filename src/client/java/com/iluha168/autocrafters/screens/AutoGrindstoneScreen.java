@@ -1,25 +1,26 @@
 package com.iluha168.autocrafters.screens;
 
 import com.iluha168.autocrafters.ServerMod;
-import com.iluha168.autocrafters.screen_handler.AutoGrindstoneScreenHandler;
+import com.iluha168.autocrafters.screen_handler.AutoGrindstoneMenu;
 
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.render.RenderLayer;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.player.Inventory;
 
-public class AutoGrindstoneScreen extends BaseAutoScreen<AutoGrindstoneScreenHandler> {
-    private static final Identifier TEXTURE = Identifier.of(ServerMod.modId, "textures/gui/container/autogrindstone.png");
+public class AutoGrindstoneScreen extends BaseAutoScreen<AutoGrindstoneMenu> {
+    private static final Identifier TEXTURE = Identifier.fromNamespaceAndPath(ServerMod.modId, "textures/gui/container/autogrindstone.png");
 
-    public AutoGrindstoneScreen(AutoGrindstoneScreenHandler handler, PlayerInventory inventory, Text title) {
-        super(handler, inventory, title, TEXTURE);
+    public AutoGrindstoneScreen(AutoGrindstoneMenu menu, Inventory inventory, Component title) {
+        super(menu, inventory, title, TEXTURE);
     }
 
     @Override
-    protected void drawBackground(DrawContext matrices, float delta, int mouseX, int mouseY) {
-        super.drawBackground(matrices, delta, mouseX, mouseY);
-        if(handler.getRedstonePower() == 1)
-            matrices.drawTexture(RenderLayer::getGuiTextured, TEXTURE, x+101, y+36, (float) backgroundWidth, 40f, 17, 11, 256, 256);
+    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+        super.extractBackground(graphics, mouseX, mouseY, delta);
+        if (this.menu.getRedstonePower() == 1)
+            graphics.blit(RenderPipelines.GUI_TEXTURED, TEXTURE,
+                this.leftPos + 101, this.topPos + 36, (float) this.imageWidth, 40f, 17, 11, 256, 256);
     }
 }

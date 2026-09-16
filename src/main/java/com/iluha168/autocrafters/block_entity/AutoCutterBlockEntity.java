@@ -1,113 +1,100 @@
 package com.iluha168.autocrafters.block_entity;
 
-import com.iluha168.autocrafters.block.AutoCutterBlock;
-import com.iluha168.autocrafters.screen_handler.AutoCutterScreenHandler;
+import com.iluha168.autocrafters.ServerMod;
+import com.iluha168.autocrafters.screen_handler.AutoCutterMenu;
 
-import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.entity.BlockEntityType;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.recipe.StonecuttingRecipe;
-import net.minecraft.recipe.display.CuttingRecipeDisplay;
-import net.minecraft.recipe.display.SlotDisplay;
-import net.minecraft.recipe.input.SingleStackRecipeInput;
-import net.minecraft.registry.RegistryWrapper;
-import net.minecraft.screen.PropertyDelegate;
-import net.minecraft.screen.ScreenHandler;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.world.World;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.ContainerData;
+import net.minecraft.world.inventory.SimpleContainerData;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.SelectableRecipe;
+import net.minecraft.world.item.crafting.SingleRecipeInput;
+import net.minecraft.world.item.crafting.StonecutterRecipe;
+import net.minecraft.world.item.crafting.display.SlotDisplayContext;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
+import org.jetbrains.annotations.Nullable;
 
 public class AutoCutterBlockEntity extends BaseAutoBlockEntity {
     public static final int[] ALL_SLOTS = new int[]{0};
-    public static final BlockEntityType<AutoCutterBlockEntity> BLOCK_ENTITY = FabricBlockEntityTypeBuilder
-        .create(AutoCutterBlockEntity::new, AutoCutterBlock.BLOCK)
-        .build();
+    private static final int DATA_RECIPE_INDEX = 0;
+
+    private final ContainerData data = new SimpleContainerData(1);
 
     public AutoCutterBlockEntity(BlockPos pos, BlockState state) {
-        super(BLOCK_ENTITY, pos, state, ALL_SLOTS.length);
+        super(ServerMod.AUTOCUTTER_BLOCK_ENTITY, pos, state, ALL_SLOTS.length);
     }
 
-    public AutoCutterBlockEntity(BlockPos pos, BlockState state, World world) {
-        super(BLOCK_ENTITY, pos, state, ALL_SLOTS.length);
-        this.setWorld(world);
+    public AutoCutterBlockEntity(BlockPos pos, BlockState state, Level level) {
+        this(pos, state);
+        this.setLevel(level);
     }
 
-	@Override
-	public boolean canInsert(int slot, ItemStack stack, Direction dir) {
-		assert world != null;
-		return !getAvailableRecipes(new SingleStackRecipeInput(stack), world).isEmpty();
-	}
+    @Override
+    public boolean canInsert(int slot, ItemStack stack, @Nullable Direction dir) {
+        Level level = this.getLevel();
+        if (level == null) return false;
+        return !getAvailableRecipes(new SingleRecipeInput(stack), level).isEmpty();
+    }
 
-	@Override
-	public boolean canExtract(int slot, ItemStack stack, Direction dir) {
+    @Override
+    public boolean canExtract(int slot, ItemStack stack, @Nullable Direction dir) {
         return true;
-	}
+    }
 
-	@Override
-	public int[] getAvailableSlots(Direction side) {
-		return ALL_SLOTS;
-	}
+    @Override
+    public int[] getSlotsForFace(Direction side) {
+        return ALL_SLOTS;
+    }
 
-	private final PropertyDelegate propertyDelegate = new PropertyDelegate() {
-        private int recipeIndex = -1; 
+    public ContainerData getData() {
+        return this.data;
+    }
 
-        @Override
-        public int get(int index) {
-			assert index == 0;
-            return recipeIndex;
-        }
+    @Override
+    public AbstractContainerMenu createMenu(int syncId, Inventory playerInventory, Player player) {
+        return new AutoCutterMenu(syncId, playerInventory, this, this.data);
+    }
 
-        @Override
-        public void set(int index, int value) {
-	        assert index == 0;
-            recipeIndex = value;
-        }
+    public static SelectableRecipe.SingleInputSet<StonecutterRecipe> getAvailableRecipes(SingleRecipeInput input, Level level) {
+        return level.recipeAccess().stonecutterRecipes().selectByInput(input.item());
+    }
 
-        @Override
-        public int size() {
-            return 1;
-        }
-    };
+    public static ItemStack craftStatic(SelectableRecipe.SingleInputSet<StonecutterRecipe> availableRecipes, int recipeIndex, Level level) {
+        var recipes = availableRecipes.entries();
+        if (recipeIndex < 0 || recipeIndex >= recipes.size())
+            return ItemStack.EMPTY;
+        var selectable = recipes.get(recipeIndex).recipe();
+        return selectable.optionDisplay().resolveForFirstStack(SlotDisplayContext.fromLevel(level));
+    }
 
-	@Override
-	public ScreenHandler createMenu(int syncId, PlayerInventory playerInventory, PlayerEntity player) {
-        return new AutoCutterScreenHandler(syncId, playerInventory, this, propertyDelegate);
-	}
+    @Override
+    public ItemStack craft() {
+        Level level = this.getLevel();
+        if (level == null) return ItemStack.EMPTY;
+        SingleRecipeInput recipeInput = new SingleRecipeInput(this.getItem(0));
+        ItemStack result = craftStatic(getAvailableRecipes(recipeInput, level), this.data.get(DATA_RECIPE_INDEX), level);
+        if (!result.isEmpty())
+            this.getItem(0).shrink(1);
+        return result;
+    }
 
-	public static CuttingRecipeDisplay.Grouping<StonecuttingRecipe> getAvailableRecipes(SingleStackRecipeInput input, World world){
-		return world.getRecipeManager().getStonecutterRecipes().filter(input.item());
-	}
+    @Override
+    protected void saveAdditional(ValueOutput output) {
+        super.saveAdditional(output);
+        output.putInt("RecipeIndex", this.data.get(DATA_RECIPE_INDEX));
+    }
 
-	public static ItemStack craftStatic(CuttingRecipeDisplay.Grouping<StonecuttingRecipe> availableRecipes, int recipeIndex){
-		var recipes = availableRecipes.entries();
-		if(recipeIndex < 0 || recipeIndex >= recipes.size())
-			return ItemStack.EMPTY;
-		return ((SlotDisplay.StackSlotDisplay) recipes.get(recipeIndex).recipe().optionDisplay()).stack().copy();
-	}
-
-	@Override
-	public ItemStack craft() {
-		assert world != null;
-		SingleStackRecipeInput recipeInput = new SingleStackRecipeInput(getStack(0));
-		ItemStack result = craftStatic(getAvailableRecipes(recipeInput, world), propertyDelegate.get(0));
-		if(!result.isEmpty())
-			getStack(0).decrement(1);
-		return result;
-	}
-
-	@Override
-	public void writeNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup registryLookup) {
-		super.writeNbt(nbt, registryLookup);
-		nbt.putInt("RecipeIndex", propertyDelegate.get(0));
-	}
-
-	@Override
-	public void readNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup registryLookup) {
-		propertyDelegate.set(0, nbt.getInt("RecipeIndex"));
-		super.readNbt(nbt, registryLookup);
-	}
+    @Override
+    protected void loadAdditional(ValueInput input) {
+        super.loadAdditional(input);
+        this.data.set(DATA_RECIPE_INDEX, input.getIntOr("RecipeIndex", -1));
+    }
 }
