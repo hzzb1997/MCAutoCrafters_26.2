@@ -1,0 +1,20 @@
+{
+	"schemaVersion": 1,
+	"id": "autocrafters",
+	"version": "0.0.0",
+	"name": "Automatic Crafters",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.iluha168.autocrafters.ServerMod"
+		],
+		"client": [
+			"com.iluha168.autocrafters.ClientMod"
+		],
+		"fabric-gametest": [
+			"com.iluha168.autocrafters.test.RecipeTest",
+			"com.iluha168.autocrafters.test.BreakingTest",
+			"com.iluha168.autocrafters.test.AutoLoomCraftTest"
+		]
+	}
+}
