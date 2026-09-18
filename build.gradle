@@ -92,6 +92,10 @@ tasks.withType(JavaCompile).configureEach {
 
 test {
 	dependsOn.add(runTestServer)
+	// The mod's tests are Minecraft GameTests executed by runTestServer, so the
+	// JUnit test task legitimately discovers none. Gradle 9 fails the build in
+	// that case unless this is disabled.
+	failOnNoDiscoveredTests = false
 }
 
 java {
